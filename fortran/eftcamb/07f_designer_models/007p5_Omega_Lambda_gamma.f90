@@ -69,6 +69,11 @@ module EFTCAMB_Omega_Lambda_gamma
         class( parametrized_function_1D ), allocatable :: OL_Gamma2      !< The OL function Gamma2.
         class( parametrized_function_1D ), allocatable :: OL_Gamma3      !< The OL function Gamma3.
 
+        ! use cs2 instead of gamma1
+        logical  :: OLGamma1FromCs2
+        integer  :: OLCs2model          !< Model selection flag for the scalar dof sound speed cs^2
+        class( parametrized_function_1D ), allocatable :: OL_Cs2         !< The scalar dof sound speed squired
+
         ! the interpolated EFT functions that come out of the background solver:
         type(equispaced_linear_interpolate_function_1D) :: EFTc          !< The interpolated function c (and derivatives).
         type(equispaced_linear_interpolate_function_1D) :: EFTLambda     !< The interpolated function Lambda (and derivatives).
@@ -102,6 +107,9 @@ module EFTCAMB_Omega_Lambda_gamma
         procedure :: initialize_background             => EFTCAMBOLInitBackground              !< subroutine that initializes the background of the Omega Lambda model.
         procedure :: solve_background_equations        => EFTCAMBOLSolveBackgroundEquations    !< subroutine that solves the OmegaLambda background equations.
 
+        ! derive gamma1 from sound speed
+        procedure :: compute_gamma1_from_cs2           => EFTCAMBOLSetGamma1FromCs2            !< subroutine that sets gamma1 given sound speed squared
+
         ! model stability:
         procedure :: additional_model_stability        => EFTCAMBOLAdditionalModelStability    !< function that computes model specific stability requirements.
 
@@ -124,7 +132,12 @@ contains
         ! read model selection flags:
         self%OLLambdamodel     = Ini%Read_Int( 'OLLambdamodel', 0 )
         self%OLOmegamodel      = Ini%Read_Int( 'OLOmegamodel' , 0 )
-        self%OLGamma1model     = Ini%Read_Int( 'OLGamma1model', 0 )
+        self%OLGamma1FromCs2   = Ini%Read_Logical( 'OLGamma1FromCs2', .false. )
+        if ( self%OLGamma1FromCs2 ) then
+            self%OLCs2model        = Ini%Read_Int( 'OLCs2model', 0 )
+        else
+            self%OLGamma1model     = Ini%Read_Int( 'OLGamma1model', 0 )
+        end if
         self%OLGamma2model     = Ini%Read_Int( 'OLGamma2model', 0 )
         self%OLGamma3model     = Ini%Read_Int( 'OLGamma3model', 0 )
         ! read precision parameters
@@ -145,7 +158,7 @@ contains
         type(TIniFile)                   :: Ini       !< Input ini file
         integer                          :: eft_error !< error code: 0 all fine, 1 initialization failed
 
-        integer                     :: temp_feedback 
+        integer                     :: temp_feedback
 
         ! get feedback flag:
         temp_feedback = Ini%Read_Int('feedback_level', 0)
@@ -156,8 +169,12 @@ contains
         ! allocate OL_Omega:
         call allocate_parametrized_1D_function( self%OL_Omega, self%OLOmegamodel, 'OLOmega', '\Omega', eft_error, temp_feedback )
         if ( eft_error == 1 ) return
-        ! allocate OL_Gamma1:
-        call allocate_parametrized_1D_function( self%OL_Gamma1, self%OLGamma1model, 'OLGamma1', '{\gamma_1}', eft_error, temp_feedback )
+        ! allocate OL_Gamma1 or OL_Cs2:
+        if ( self%OLGamma1FromCs2 ) then
+            call allocate_parametrized_1D_function( self%OL_Cs2, self%OLCs2model, 'OLCs2', '{c_s^2}', eft_error, temp_feedback )
+        else
+            call allocate_parametrized_1D_function( self%OL_Gamma1, self%OLGamma1model, 'OLGamma1', '{\gamma_1}', eft_error, temp_feedback )
+        end if
         if ( eft_error == 1 ) return
         ! allocate OL_Gamma2:
         call allocate_parametrized_1D_function( self%OL_Gamma2, self%OLGamma2model, 'OLGamma2', '{\gamma_2}', eft_error, temp_feedback )
@@ -169,7 +186,11 @@ contains
         ! additional initialization of the function:
         call self%OL_Lambda%init_func_from_file ( Ini, eft_error )
         call self%OL_Omega%init_func_from_file  ( Ini, eft_error )
-        call self%OL_Gamma1%init_func_from_file ( Ini, eft_error )
+        if ( self%OLGamma1FromCs2 ) then
+            call self%OL_Cs2%init_func_from_file ( Ini, eft_error )
+        else
+            call self%OL_Gamma1%init_func_from_file ( Ini, eft_error )
+        end if
         call self%OL_Gamma2%init_func_from_file ( Ini, eft_error )
         call self%OL_Gamma3%init_func_from_file ( Ini, eft_error )
 
@@ -207,14 +228,24 @@ contains
         end do
         call self%OL_Omega%init_parameters(temp)
         deallocate(temp)
-        ! then OL_Gamma1 parameters:
-        num_params_function = self%OL_Gamma1%parameter_number
-        allocate( temp(num_params_function) )
-        do i = 1, num_params_function
-            temp(i)         = array(num_params_temp)
-            num_params_temp = num_params_temp +1
-        end do
-        call self%OL_Gamma1%init_parameters(temp)
+        ! then OL_Gamma1 or Cs2 parameters:
+        if ( self%OLGamma1FromCs2 ) then
+            num_params_function = self%OL_Cs2%parameter_number
+            allocate( temp(num_params_function) )
+            do i = 1, num_params_function
+                temp(i)         = array(num_params_temp)
+                num_params_temp = num_params_temp +1
+            end do
+            call self%OL_Cs2%init_parameters(temp)
+        else
+            num_params_function = self%OL_Gamma1%parameter_number
+            allocate( temp(num_params_function) )
+            do i = 1, num_params_function
+                temp(i)         = array(num_params_temp)
+                num_params_temp = num_params_temp +1
+            end do
+            call self%OL_Gamma1%init_parameters(temp)
+        end if
         deallocate(temp)
         ! then OL_Gamma2 parameters:
         num_params_function = self%OL_Gamma2%parameter_number
@@ -258,7 +289,11 @@ contains
 
         call self%OL_Lambda%init_from_file ( Ini, eft_error )
         call self%OL_Omega%init_from_file  ( Ini, eft_error )
-        call self%OL_Gamma1%init_from_file ( Ini, eft_error )
+        if ( self%OLGamma1FromCs2 ) then
+            call self%OL_Cs2%init_from_file ( Ini, eft_error )
+        else
+            call self%OL_Gamma1%init_from_file ( Ini, eft_error )
+        end if
         call self%OL_Gamma2%init_from_file ( Ini, eft_error )
         call self%OL_Gamma3%init_from_file ( Ini, eft_error )
 
@@ -275,7 +310,11 @@ contains
         self%parameter_number = 0
         self%parameter_number = self%parameter_number +self%OL_Lambda%parameter_number
         self%parameter_number = self%parameter_number +self%OL_Omega%parameter_number
-        self%parameter_number = self%parameter_number +self%OL_Gamma1%parameter_number
+        if ( self%OLGamma1FromCs2 ) then
+            self%parameter_number = self%parameter_number +self%OL_Cs2%parameter_number
+        else
+            self%parameter_number = self%parameter_number +self%OL_Gamma1%parameter_number
+        end if
         self%parameter_number = self%parameter_number +self%OL_Gamma2%parameter_number
         self%parameter_number = self%parameter_number +self%OL_Gamma3%parameter_number
 
@@ -300,7 +339,11 @@ contains
         write(*,*)
         if ( self%OLLambdamodel     /= 0 ) write(*,'(a,I3)') '   OLLambdamodel     =', self%OLLambdamodel
         if ( self%OLOmegamodel      /= 0 ) write(*,'(a,I3)') '   OLOmegamodel      =', self%OLOmegamodel
-        if ( self%OLGamma1model     /= 0 ) write(*,'(a,I3)') '   OLGamma1model     =', self%OLGamma1model
+        if ( self%OLGamma1FromCs2 ) then
+            if ( self%OLCs2model        /= 0 ) write(*,'(a,I3)') '   OLCs2model     =', self%OLCs2model
+        else
+            if ( self%OLGamma1model     /= 0 ) write(*,'(a,I3)') '   OLGamma1model     =', self%OLGamma1model
+        end if
         if ( self%OLGamma2model     /= 0 ) write(*,'(a,I3)') '   OLGamma2model     =', self%OLGamma2model
         if ( self%OLGamma3model     /= 0 ) write(*,'(a,I3)') '   OLGamma3model     =', self%OLGamma3model
 
@@ -308,7 +351,11 @@ contains
         ! print functions informations:
         call self%OL_Lambda%feedback ( print_params )
         call self%OL_Omega%feedback  ( print_params )
-        call self%OL_Gamma1%feedback ( print_params )
+        if ( self%OLGamma1FromCs2 ) then
+            call self%OL_Cs2%feedback ( print_params )
+        else
+            call self%OL_Gamma1%feedback ( print_params )
+        end if
         call self%OL_Gamma2%feedback ( print_params )
         call self%OL_Gamma3%feedback ( print_params )
 
@@ -330,7 +377,11 @@ contains
         ! compute the incremental number of parameters:
         Nw = self%OL_Lambda%parameter_number
         NM = Nw + self%OL_Omega%parameter_number
-        NK = NM + self%OL_Gamma1%parameter_number
+        if ( self%OLGamma1FromCs2 ) then
+            NK = NM + self%OL_Cs2%parameter_number
+        else
+            NK = NM + self%OL_Gamma1%parameter_number
+        end if
         NB = NK + self%OL_Gamma2%parameter_number
         NT = NB + self%OL_Gamma3%parameter_number
 
@@ -354,11 +405,17 @@ contains
             end do
             return
 
-        ! parameter from OL_Gamma1 function
+        ! parameter from OL_Gamma1 or Cs2 function
         else if ( i <= NK) then
-            do j = 1, self%OL_Gamma1%parameter_number
-                if ( i-NM == j ) call self%OL_Gamma1%parameter_names( j, name )
-            end do
+            if ( self%OLGamma1FromCs2 ) then
+                do j = 1, self%OL_Cs2%parameter_number
+                    if ( i-NM == j ) call self%OL_Cs2%parameter_names( j, name )
+                end do
+            else
+                do j = 1, self%OL_Gamma1%parameter_number
+                    if ( i-NM == j ) call self%OL_Gamma1%parameter_names( j, name )
+                end do
+            end if
             return
 
         !parameter from OL_Gamma2 function
@@ -395,7 +452,11 @@ contains
         ! compute the incremental number of parameters:
         Nw = self%OL_Lambda%parameter_number
         NM = Nw + self%OL_Omega%parameter_number
-        NK = NM + self%OL_Gamma1%parameter_number
+        if ( self%OLGamma1FromCs2 ) then
+            NK = NM + self%OL_Cs2%parameter_number
+        else
+            NK = NM + self%OL_Gamma1%parameter_number
+        end if
         NB = NK + self%OL_Gamma2%parameter_number
         NT = NB + self%OL_Gamma3%parameter_number
 
@@ -419,11 +480,17 @@ contains
             end do
             return
 
-        ! parameter from OL_Gamma1 function
+        ! parameter from OL_Gamma1 or Cs2 function
         else if ( i <= NK) then
-            do j = 1, self%OL_Gamma1%parameter_number
-                if ( i-NM == j ) call self%OL_Gamma1%parameter_names_latex( j, latexname )
-            end do
+            if ( self%OLGamma1FromCs2 ) then
+                do j = 1, self%OL_Cs2%parameter_number
+                    if ( i-NM == j ) call self%OL_Cs2%parameter_names_latex( j, latexname )
+                end do
+            else
+                do j = 1, self%OL_Gamma1%parameter_number
+                    if ( i-NM == j ) call self%OL_Gamma1%parameter_names_latex( j, latexname )
+                end do
+            end if
             return
 
         !parameter from OL_Gamma2 function
@@ -461,7 +528,11 @@ contains
         ! compute the incremental number of parameters:
         Nw = self%OL_Lambda%parameter_number
         NM = Nw + self%OL_Omega%parameter_number
-        NK = NM + self%OL_Gamma1%parameter_number
+        if ( self%OLGamma1FromCs2 ) then
+            NK = NM + self%OL_Cs2%parameter_number
+        else
+            NK = NM + self%OL_Gamma1%parameter_number
+        end if
         NB = NK + self%OL_Gamma2%parameter_number
         NT = NB + self%OL_Gamma3%parameter_number
 
@@ -485,11 +556,17 @@ contains
             end do
             return
 
-        ! parameter from OL_Gamma1 function
+        ! parameter from OL_Gamma1 or Cs2 function
         else if ( i <= NK) then
-            do j = 1, self%OL_Gamma1%parameter_number
-                if ( i-NM == j ) call self%OL_Gamma1%parameter_value( j, value )
-            end do
+            if ( self%OLGamma1FromCs2 ) then
+                do j = 1, self%OL_Cs2%parameter_number
+                    if ( i-NM == j ) call self%OL_Cs2%parameter_value( j, value )
+                end do
+            else
+                do j = 1, self%OL_Gamma1%parameter_number
+                    if ( i-NM == j ) call self%OL_Gamma1%parameter_value( j, value )
+                end do
+            end if
             return
 
         !parameter from OL_Gamma2 function
@@ -543,6 +620,7 @@ contains
 
         eft_cache%EFTc         = self%EFTc%value( x, index=ind, coeff=mu )
         eft_cache%EFTcdot      = self%EFTc%first_derivative( x, index=ind, coeff=mu )
+        eft_cache%EFTcdotdot   = self%EFTc%second_derivative( x, index=ind, coeff=mu )
 
         eft_cache%EFTLambda    = self%EFTLambda%value( x, index=ind, coeff=mu )
         eft_cache%EFTLambdadot = self%EFTLambda%first_derivative( x, index=ind, coeff=mu )
@@ -562,8 +640,6 @@ contains
         type(TEFTCAMB_timestep_cache ), intent(inout) :: eft_cache     !< the EFTCAMB timestep cache that contains all the physical values.
 
         ! compute the EFT functions:
-        eft_cache%EFTGamma1V  = self%OL_Gamma1%value(a)
-        eft_cache%EFTGamma1P  = self%OL_Gamma1%first_derivative(a)
         eft_cache%EFTGamma2V  = self%OL_Gamma2%value(a)
         eft_cache%EFTGamma2P  = self%OL_Gamma2%first_derivative(a)
         eft_cache%EFTGamma2PP = self%OL_Gamma2%second_derivative(a)
@@ -580,6 +656,13 @@ contains
         eft_cache%EFTGamma5P  = +0.5_dl*eft_cache%EFTGamma3P
         eft_cache%EFTGamma6V  = 0._dl
         eft_cache%EFTGamma6P  = 0._dl
+        if ( self%OLGamma1FromCs2 ) then
+            call self%compute_gamma1_from_cs2(a, eft_par_cache, eft_cache)
+        else
+            eft_cache%EFTGamma1V  = self%OL_Gamma1%value(a)
+            eft_cache%EFTGamma1P  = self%OL_Gamma1%first_derivative(a)
+            eft_cache%EFTGamma1PP = self%OL_Gamma1%second_derivative(a)
+        end if
 
 
     end subroutine EFTCAMBOLSecondOrderEFTFunctions
@@ -660,10 +743,10 @@ contains
         integer,  allocatable :: iwork(:)
 
         ! background quantities that are shared among the derivs and output routines:
-        real(dl) :: a, a2, grhob_t, grhoc_t, grhor_t, grhog_t, grhonu_tot, gpinu_tot
-        real(dl) :: grhonu, gpinu, grhormass_t, grho_matter, gpres_matter, grho_m_temp
-        real(dl) :: H2, Hdot, omega_m
-        real(dl) :: EFTOmega, EFTOmegaP, EFTOmegaPP
+        real(dl) :: a, a2, grhob_t, grhoc_t, grhor_t, grhog_t, grhonu_tot, gpinu_tot, gpinudot_tot
+        real(dl) :: grhonu, gpinu, grhormass_t, grho_matter, gpres_matter, gpresdot_matter, grho_m_temp
+        real(dl) :: H2, Hdot, Hdotdot, omega_m
+        real(dl) :: EFTOmega, EFTOmegaP, EFTOmegaPP, EFTOmegaPPP
         real(dl) :: omega_r_t, omega_m_t, omega_phi_t, omega_nu_t, omega_tot_t
         integer  :: nu_i
 
@@ -773,10 +856,18 @@ contains
                 t2 = self%EFTc%x(i)
                 ! check if function parametrizations are regular
                 a = exp(t1)
-                if (.not. self%OL_Gamma1%compute_function_stability(a) .and. self%OL_Gamma2%compute_function_stability(a) .and. self%OL_Gamma3%compute_function_stability(a) .and. self%OL_Lambda%compute_function_stability(a) .and. self%OL_Omega%compute_function_stability(a)) then
-                    write(*,*) 'One or multiple EFT functions are not regular'
-                    success = .False.
-                    return
+                if ( self%OLGamma1FromCs2 ) then
+                    if (.not. (self%OL_Cs2%compute_function_stability(a) .and. self%OL_Gamma2%compute_function_stability(a) .and. self%OL_Gamma3%compute_function_stability(a) .and. self%OL_Lambda%compute_function_stability(a) .and. self%OL_Omega%compute_function_stability(a))) then
+                        write(*,*) 'One or multiple EFT functions are not regular'
+                        success = .False.
+                        return
+                    end if
+                else
+                    if (.not. (self%OL_Gamma1%compute_function_stability(a) .and. self%OL_Gamma2%compute_function_stability(a) .and. self%OL_Gamma3%compute_function_stability(a) .and. self%OL_Lambda%compute_function_stability(a) .and. self%OL_Omega%compute_function_stability(a))) then
+                        write(*,*) 'One or multiple EFT functions are not regular'
+                        success = .False.
+                        return
+                    end if
                 end if
                 ! solve the system:
                 call DLSODA ( derivs, num_eq, y, t1, t2, itol, rtol, atol, itask, istate, iopt, RWORK, LRW, IWORK, LIW, jacobian, JacobianMode)
@@ -952,7 +1043,7 @@ contains
             self%EFTc%y(ind)      = +1.5_dl*(1._dl +EFTOmega +a*EFTOmegaP )*adotoa2 -0.5_dl*(grho_matter) -1.5_dl*params_cache%h0_Mpc**2*(1._dl-omega_m)*( 1._dl+self%OL_Lambda%value(a) )*a2
             self%EFTLambda%y(ind) = -3._dl*params_cache%h0_Mpc**2*(1._dl-omega_m)*( 1._dl+self%OL_Lambda%value(a) )*a2
 
-            ! 3) compute cdot:
+            ! 3) compute cdot and Lambdadot:
             if ( adotoa2<0._dl ) then
                 self%EFTc%yp(ind) = double_NaN
                 return
@@ -967,7 +1058,27 @@ contains
                 & +0.5_dl*( grho_matter + gpres_matter ) &
                 & -0.5_dl*a**3*params_cache%h0_Mpc**2*(1._dl-omega_m)*self%OL_Lambda%first_derivative(a) )
             self%EFTLambda%yp(ind) = -3._dl*params_cache%h0_Mpc**2*adotoa*(1._dl-omega_m)*( self%OL_Lambda%first_derivative(a) )*a**3
+
+            ! 4) compute cdotdot and Lambdadotdot
+            gpinudot_tot     = 0._dl
+            if ( params_cache%Num_Nu_Massive /= 0 ) then
+                do nu_i = 1, params_cache%Nu_mass_eigenstates
+                    grhonu    = 0._dl
+                    gpinu     = 0._dl
+                    grhormass_t = params_cache%grhormass(nu_i)/a2
+                    call ThermalNuBack%rho_P(a*params_cache%nu_masses(nu_i), grhonu, gpinu)
+                    gpinudot_tot = gpinudot_tot + grhormass_t*(ThermalNuBack%pidot(a*params_cache%nu_masses(nu_i),adotoa, gpinu) - 4._dl*adotoa*gpinu)
+                end do
+            end if
+
+            gpresdot_matter = gpinudot_tot - 4._dl*adotoa*( grhog_t +grhor_t )/3._dl
+            EFTOmegaPPP     = self%OL_Omega%third_derivative(a)
+            Hdotdot         = 1.0_dl/(1._dl + EFTOmega + 0.5_dl*a*EFTOmegaP)*( -0.5_dl*a*adotoa**3*( 3.0_dl*EFTOmegaP +4.0_dl*a*EFTOmegaPP +a**2*EFTOmegaPPP )&
+                      & -adotoa*Hdot*(1._dl + EFTOmega +3.5_dl*a*EFTOmegaP +1.5_dl*a**2*EFTOmegaPP ) &
+                      & -0.5_dl*( gpresdot_matter  +2.0_dl*adotoa*gpres_matter  + self%EFTLambda%yp(ind) + 2.0_dl*adotoa*self%EFTLambda%y(ind) ))
+
             self%EFTLambda%ypp(ind) = -3._dl*params_cache%h0_Mpc**2*(1._dl-omega_m)*(a**3)*( self%OL_Lambda%second_derivative(a)*a*adotoa**2 + self%OL_Lambda%first_derivative(a)*adotoa**2 + self%OL_Lambda%first_derivative(a)*Hdot )
+            self%EFTc%ypp(ind) = (self%EFTLambda%ypp(ind) + 3._dl*adotoa**4*(4._dl + 4._dl*EFTOmega - 2._dl*a*EFTOmegaP + a**3*EFTOmegaPPP) + 3._dl*Hdot*(gpres_matter + grho_matter + 2._dl*(1._dl + EFTOmega + a*EFTOmegaP)*Hdot) - 3._dl*adotoa**2*(3._dl*gpres_matter + 3._dl*grho_matter + 5._dl*(2._dl + 2._dl*EFTOmega - a**2*EFTOmegaPP)*Hdot) + 3._dl*adotoa*(gpresdot_matter + 2._dl*(1._dl + EFTOmega + a*EFTOmegaP)*Hdotdot))/2._dl
 
             ! 4) debug code:
             if ( DebugEFTCAMB ) then
@@ -983,6 +1094,79 @@ contains
     end subroutine EFTCAMBOLSolveBackgroundEquations
 
     ! ---------------------------------------------------------------------------------------------
+    !> Subroutine that computes gamma1 and its derivatives from the sound speed
+    subroutine EFTCAMBOLSetGamma1FromCs2( self, a, eft_par_cache, eft_cache )
+
+        implicit none
+
+        class(EFTCAMB_OmegaLambda_gamma)                   :: self          !< the base class
+        real(dl), intent(in)                               :: a             !< the input scale factor.
+        type(TEFTCAMB_parameter_cache), intent(inout)      :: eft_par_cache !< the EFTCAMB parameter cache that contains all the physical parameters.
+        type(TEFTCAMB_timestep_cache ), intent(inout)      :: eft_cache     !< the EFTCAMB timestep cache that contains all the physical values.
+
+        real(dl) :: tmp
+        real(dl) :: h0, hc, dhc, d2hc, d3hc, f1, df1, d2f1, d3f1, f2, df2, d2f2, d3f2, f3, df3, d2f3, cs2, dcs2, d2cs2, eftc, dc, d2c
+        real(dl) :: omg, domg, d2omg, d3omg, d4omg, gm2, dgm2, d2gm2, d3gm2, gm3, dgm3, d2gm3, d3gm3
+
+        omg  = eft_cache%EFTOmegaV
+        domg = eft_cache%EFTOmegaP
+        d2omg = eft_cache%EFTOmegaPP
+        d3omg = eft_cache%EFTOmegaPPP
+        d4omg = eft_cache%EFTOmegaPPPP
+        gm2  = eft_cache%EFTGamma2V
+        dgm2 = eft_cache%EFTGamma2P
+        d2gm2 = eft_cache%EFTGamma2PP
+        d3gm2 = eft_cache%EFTGamma2PPP
+        gm3  = eft_cache%EFTGamma3V
+        dgm3 = eft_cache%EFTGamma3P
+        d2gm3 = eft_cache%EFTGamma3PP
+        d3gm3 = eft_cache%EFTGamma3PPP
+        h0   = eft_par_cache%h0_Mpc
+        hc   = eft_cache%adotoa
+        dhc  = eft_cache%Hdot
+        d2hc = eft_cache%Hdotdot
+        d3hc = eft_cache%Hdotdotdot
+        eftc = eft_cache%EFTc/a**2
+        dc   = eft_cache%EFTcdot/a**2
+        d2c  = eft_cache%EFTcdotdot/a**2
+        cs2  = self%OL_Cs2%value(a)
+        dcs2 = self%OL_Cs2%first_derivative(a)
+        d2cs2 = self%OL_Cs2%second_derivative(a)
+
+        ! subclass: gm3 + gm4 = 0, gm6 = 0
+        f1 = 2._dl*(1._dl + omg + gm3)
+
+        f2 = gm2*h0 + (domg + f1/a)*hc
+
+        ! derivatives wrt a
+        df1 = 2._dl*(dgm3 + domg)
+
+        df2 = (a*dhc*domg + a*hc*(a*dgm2*h0 + a*d2omg*hc + df1*hc) + f1*(dhc - hc**2))/(a**2*hc)
+
+        d2f1 = 2._dl*(d2gm3 + d2omg)
+
+        d2f2 = (f1*(-dhc**2 + d2hc*hc - 3._dl*dhc*hc**2 + 2._dl*hc**4) + a*(-(dhc**2*domg) + d2hc*domg*hc + dhc*(2._dl*a*d2omg + 2._dl*df1 - domg)*hc**2 + hc**3*(a*d2f1*hc - 2._dl*df1*hc + a**2*(d2gm2*h0 + d3omg*hc))))/(a**3*hc**3)
+
+        d3f1 = 2._dl*(d3gm3 + d3omg)
+
+        d3f2 = (a*(3._dl*dhc**3*domg - 4._dl*d2hc*dhc*domg*hc + (-3._dl*df1*dhc**2 + d3hc*domg + 3._dl*dhc**2*(-(a*d2omg) + domg))*hc**2 + 3._dl*d2hc*(a*d2omg + df1 - domg)*hc**3 + dhc*(3._dl*a*(d2f1 - d2omg + a*d3omg) - 9._dl*df1 + 2._dl*domg)*hc**4 + a**3*d3gm2*h0*hc**5 + (a*(-3._dl*d2f1 + a*(d3f1 + a*d4omg)) + 6._dl*df1)*hc**6) + f1*(3._dl*dhc**3 + 6._dl*dhc**2*hc**2 + dhc*(-4._dl*d2hc*hc + 11._dl*hc**4) + hc**2*(d3hc - 6._dl*hc*(d2hc + hc**3))))/(a**4*hc**5)
+
+        ! compute f3 from cs2
+        f3 = (2._dl*a*f1**2*(dhc*domg + hc*(f2 - domg*hc)) + 4._dl*f1**2*(dhc - hc**2)*(1._dl + omg) + a**2*(4._dl*eftc*f1**2 + 4._dl*df1*f1*f2*hc + 2._dl*f1**2*hc*(-df2 + d2omg*hc) - f2**2*(4._dl + 3._dl*cs2*f1 + 4._dl*omg)))/(a**2*cs2*f1**2)
+
+        df3 = (3._dl*f1*f2*(-2._dl*df2*f1 + df1*f2) - (2._dl*dcs2*f1*(a*f1**2*(dhc*domg + hc*(f2 - domg*hc)) + 2._dl*f1**2*(dhc - hc**2)*(1._dl + omg) + a**2*(2._dl*eftc*f1**2 + 2._dl*df1*f1*f2*hc + f1**2*hc*(-df2 + d2omg*hc) - 2._dl*f2**2*(1 + omg))))/(a**2*cs2**2) + (2._dl*(2._dl*a**2*f1**2*(df1*dhc*f2 + a*(df1*df2 + d2f1*f2)*hc**2) + 4._dl*a**3*df1*f2**2*hc*(1 + omg) - 2._dl*a**3*f1*f2*hc*(domg*f2 + df1**2*hc + 2._dl*df2*(1._dl + omg)) + f1**3*(a**3*hc**2*(-d2f2 + d3omg*hc) + a*dhc*(f2 - domg*hc) - a*hc**2*(f2 + domg*hc) + a**2*(2._dl*dc - df2*dhc + 3._dl*d2omg*dhc*hc + df2*hc**2 - d2omg*hc**3) + 4._dl*hc*(-2._dl*dhc + hc**2)*(1._dl + omg) + d2hc*(2._dl + a*domg + 2._dl*omg))))/(a**3*cs2*hc))/f1**3
+
+        d2f3 = (-3._dl*f1*(2._dl*df2**2*f1**2 - 4._dl*df1*df2*f1*f2 + f2*(2._dl*d2f2*f1**2 + 2._dl*df1**2*f2 - d2f1*f1*f2)) + (4._dl*dcs2**2*f1**2*(a*f1**2*(dhc*domg + hc*(f2 - domg*hc)) + 2._dl*f1**2*(dhc - hc**2)*(1._dl + omg) + a**2*(2._dl*eftc*f1**2 + 2._dl*df1*f1*f2*hc + f1**2*hc*(-df2 + d2omg*hc) - 2._dl*f2**2*(1._dl + omg))))/(a**2*cs2**3) - (2._dl*f1*(a**2*f1**2*(4._dl*dc*dcs2*f1 + d2cs2*f1*hc*(dhc*domg + hc*(f2 - domg*hc)) + dcs2*(4._dl*df1*dhc*f2 + 6._dl*d2omg*dhc*f1*hc - 2._dl*d2omg*f1*hc**3 + 2._dl*df2*f1*(-dhc + hc**2))) + 8._dl*dcs2*f1**3*hc*(-2._dl*dhc + hc**2)*(1._dl + omg) + 2._dl*d2hc*dcs2*f1**3*(2._dl + a*domg + 2._dl*omg) + 2._dl*a*f1**3*(dcs2*dhc*(f2 - domg*hc) - dcs2*hc**2*(f2 + domg*hc) + d2cs2*hc*(dhc - hc**2)*(1._dl + omg)) + a**3*hc*(2._dl*eftc*d2cs2*f1**3 + d2cs2*f1*(2._dl*df1*f1*f2*hc + f1**2*hc*(-df2 + d2omg*hc) - 2._dl*f2**2*(1._dl + omg)) + 2._dl*dcs2*(-2._dl*df1**2*f1*f2*hc + f1*(-2._dl*domg*f2**2 + f1*hc*(-(d2f2*f1) + 2._dl*d2f1*f2 + d3omg*f1*hc)) + 4._dl*df1*f2**2*(1._dl + omg) + 2._dl*df2*f1*(df1*f1*hc - 2._dl*f2*(1._dl + omg))))))/(a**3*cs2**2*hc) + (2._dl*(2._dl*a**2*f1**3*(df1*(-(dhc**2*f2) + d2hc*f2*hc + dhc*(2._dl*a*df2 - f2)*hc**2 + a**2*d2f2*hc**4) + a*hc**2*(a*d3f1*f2*hc**2 + 2._dl*d2f1*(dhc*f2 + a*df2*hc**2))) - 12._dl*a**4*df1**2*f2**2*hc**3*(1._dl + omg) + 4._dl*a**4*f1*f2*hc**3*(2._dl*df1*domg*f2 + df1**3*hc + 4._dl*df1*df2*(1._dl + omg) + d2f1*f2*(1._dl + omg)) - 2._dl*a**3*f1**2*hc**2*(2._dl*df1**2*dhc*f2 + a*df1*(2._dl*df1*df2 + 3._dl*d2f1*f2)*hc**2 + a*hc*(4._dl*df2*domg*f2 + 2._dl*df2**2*(1._dl + omg) + f2*(d2omg*f2 + 2._dl*d2f2*(1._dl + omg)))) + f1**4*(a**4*hc**4*(-d3f2 + d4omg*hc) + a**3*hc**2*(-2._dl*d2f2*dhc + 5._dl*d3omg*dhc*hc + d2f2*hc**2 - d3omg*hc**3) + a*(-(dhc**2*f2) + d3hc*domg*hc + 2._dl*hc**4*(f2 + 3._dl*domg*hc) - dhc*hc**2*(3._dl*f2 + 8._dl*domg*hc)) + a**2*(-2._dl*dc*(dhc + hc**2) + 2._dl*hc*(d2c - 3._dl*d2omg*dhc*hc**2) + df2*(dhc**2 + 3._dl*dhc*hc**2 - 2._dl*hc**4)) + 2._dl*hc*(d3hc + 16._dl*dhc*hc**2 - 6._dl*hc**4)*(1._dl + omg) - d2hc*(dhc*(2._dl + a*domg + 2._dl*omg) + hc*(a**2*(df2 - 4._dl*d2omg*hc) + a*(-f2 + domg*hc) + 14._dl*hc*(1._dl + omg))))))/(a**4*cs2*hc**3))/f1**4
+
+        eft_cache%EFTGamma1V  = (a**2*(-2._dl*eftc + f3) + 3._dl*f1*hc**2 + 6._dl*a*hc*(gm2*h0 + domg*hc))/(4._dl*a**2*h0**2)
+        eft_cache%EFTGamma1P  = (6._dl*a*gm2*h0*(dhc - hc**2) + 6._dl*f1*hc*(dhc - hc**2) + a*(-2._dl*a*dc + hc*(a**2*df3 + 12._dl*dhc*domg + 6._dl*a*dgm2*h0*hc + 3._dl*(2._dl*a*d2omg + df1 - 2._dl*domg)*hc**2)))/(4._dl*a**3*h0**2*hc)
+        eft_cache%EFTGamma1PP = (6._dl*f1*hc**2*(d2hc - 5._dl*dhc*hc + 3._dl*hc**3) + a*(2._dl*a*dc*dhc - 2._dl*a*d2c*hc + 2._dl*(6._dl*d2hc*domg + a*(dc + 6._dl*dgm2*dhc*h0))*hc**2 + (a**3*d2f3 + 24._dl*a*d2omg*dhc + 12._dl*dhc*(df1 - 3._dl*domg))*hc**3 + 6._dl*a*(a*d2gm2 - 2._dl*dgm2)*h0*hc**4 + 3._dl*(a*(d2f1 - 4._dl*d2omg) + 2._dl*a**2*d3omg - 4._dl*df1 + 4._dl*domg)*hc**5) - 6._dl*a*gm2*h0*(dhc**2 + 3._dl*dhc*hc**2 - hc*(d2hc + 2._dl*hc**3)))/(4._dl*a**4*h0**2*hc**3)
+
+    end subroutine EFTCAMBOLSetGamma1FromCs2
+
+
+
+    ! ---------------------------------------------------------------------------------------------
     !> Function that computes model specific stability requirements. Currently only check if all EFT functions are regular
     function EFTCAMBOLAdditionalModelStability( self, a, eft_par_cache, eft_cache )
 
@@ -995,8 +1179,11 @@ contains
 
         logical :: EFTCAMBOLAdditionalModelStability          !< the return value of the stability computation. True if the model specific stability criteria are met, false otherwise.
 
-        EFTCAMBOLAdditionalModelStability = self%OL_Gamma1%compute_function_stability(a) .and. self%OL_Gamma2%compute_function_stability(a) .and. self%OL_Gamma3%compute_function_stability(a) .and. self%OL_Lambda%compute_function_stability(a) .and. self%OL_Omega%compute_function_stability(a)
-        
+        if ( self%OLGamma1FromCs2 ) then
+            EFTCAMBOLAdditionalModelStability = self%OL_Cs2%compute_function_stability(a) .and. self%OL_Gamma2%compute_function_stability(a) .and. self%OL_Gamma3%compute_function_stability(a) .and. self%OL_Lambda%compute_function_stability(a) .and. self%OL_Omega%compute_function_stability(a)
+        else
+            EFTCAMBOLAdditionalModelStability = self%OL_Gamma1%compute_function_stability(a) .and. self%OL_Gamma2%compute_function_stability(a) .and. self%OL_Gamma3%compute_function_stability(a) .and. self%OL_Lambda%compute_function_stability(a) .and. self%OL_Omega%compute_function_stability(a)
+        end if
         ! Ensures that 1+Omega positive for stable gravity, imposing > -0.95 for nemeric stability, by Gen
         EFTCAMBOLAdditionalModelStability = EFTCAMBOLAdditionalModelStability .and. (self%OL_Omega%value(a) > self%OL_Omega_min)
 
