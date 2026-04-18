@@ -114,7 +114,7 @@ contains
         adotoa2 = eft_cache%adotoa**2._dl
 
         one_plus_omega = 1.0_dl + eft_cache%EFTOmegaV
-  
+
         eft_cache%Hdot = 1.0_dl/(one_plus_omega+ 0.5_dl*a*eft_cache%EFTOmegaP)*( -0.5_dl*( one_plus_omega +2.0_dl*a*eft_cache%EFTOmegaP +a2*eft_cache%EFTOmegaPP )*eft_cache%adotoa**2 &
                       & -0.5_dl*(eft_cache%gpresm_t ) -0.5_dl*eft_cache%EFTLambda)
 
@@ -122,19 +122,22 @@ contains
                       & -eft_cache%adotoa*eft_cache%Hdot*(one_plus_omega +3.5_dl*a*eft_cache%EFTOmegaP +1.5_dl*a2*eft_cache%EFTOmegaPP ) &
                       & -0.5_dl*( eft_cache%gpresdotm_t  +2.0_dl*eft_cache%adotoa*eft_cache%gpresm_t  +eft_cache%EFTLambdadot +2.0_dl*eft_cache%adotoa*eft_cache%EFTLambda ))
 
-        denom = one_plus_omega + 0.5*a*eft_cache%EFTOmegaP 
+        denom = one_plus_omega + 0.5*a*eft_cache%EFTOmegaP
 
-        N1 = - a*eft_cache%adotoa * (3.0_dl*eft_cache%EFTOmegaP + 0.5_dl*a*eft_cache%EFTOmegaPP)         
+        ! original expression (wrong)
+        ! N1 = - a*eft_cache%adotoa * (3.0_dl*eft_cache%EFTOmegaP + 0.5_dl*a*eft_cache%EFTOmegaPP)
 
-        eft_cache%Hdotdotdot = N1/2._dl/denom**2._dl * (-0.5_dl*a*eft_cache%adotoa**3._dl*(3._dl*eft_cache%EFTOmegaP + 4._dl*a*eft_cache%EFTOmegaPP + a2*eft_cache%EFTOmegaPPP)&
-                                  & - eft_cache%adotoa*eft_cache%Hdot * (one_plus_omega + 3.5_dl * a*eft_cache%EFTOmegaP*1.5_dl*a2*eft_cache%EFTOmegaPP)&
-                                  & -0.5_dl * (eft_cache%gpresdotdotm_t + 2.0_dl*eft_cache%adotoa*eft_cache%gpresdotm_t - 0.5_dl*(eft_cache%EFTLambdadot + 2.0_dl*eft_cache%adotoa*eft_cache%EFTLambda) )) &
-                                  & + 1/denom * (-a*adotoa2*(adotoa2 + 3.0_dl*eft_cache%adotoa)*(3._dl*eft_cache%EFTOmegaP + 4._dl*a*eft_cache%EFTOmegaPP + a2*eft_cache%EFTOmegaPPP) &
-                                  & - 0.5_dl * a2 * eft_cache%adotoa**4._dl * (7._dl * eft_cache%EFTOmegaPP + 6._dl*a*eft_cache%EFTOmegaPPP + a2*eft_cache%EFTOmegaPPPP) &
-                                  & - (eft_cache%Hdot**2. + eft_cache%adotoa * eft_cache%Hdotdot)*(one_plus_omega + 3.5_dl *a*eft_cache%EFTOmegaP*1.5_dl*a2*eft_cache%EFTOmegaPP) &
-                                  & - 0.5_dl*a*adotoa2*eft_cache%Hdot * (9._dl*eft_cache%EFTOmegaP + 13._dl*a*eft_cache%EFTOmegaPP + 3._dl * a2 * eft_cache%EFTOmegaPPP) &
-                                  & - 0.5_dl*(eft_cache%gpresdotdotm_t + 4._dl*eft_cache%adotoa*eft_cache%gpresdotm_t + 2._dl*eft_cache%Hdot*eft_cache%gpresm_t + 4._dl * adotoa2 * eft_cache%gpresm_t) &
-                                  & - 0.5_dl*(eft_cache%EFTLambdadotdot + 4._dl * eft_cache%adotoa*eft_cache%EFTLambdadot + 2._dl*eft_cache%Hdot*eft_cache%EFTLambda + 4._dl * adotoa2 * eft_cache%EFTLambda))
+        ! eft_cache%Hdotdotdot = N1/2._dl/denom**2._dl * (-0.5_dl*a*eft_cache%adotoa**3._dl*(3._dl*eft_cache%EFTOmegaP + 4._dl*a*eft_cache%EFTOmegaPP + a2*eft_cache%EFTOmegaPPP)&
+        !                           & - eft_cache%adotoa*eft_cache%Hdot * (one_plus_omega + 3.5_dl * a*eft_cache%EFTOmegaP*1.5_dl*a2*eft_cache%EFTOmegaPP)&
+        !                           & -0.5_dl * (eft_cache%gpresdotdotm_t + 2.0_dl*eft_cache%adotoa*eft_cache%gpresdotm_t - 0.5_dl*(eft_cache%EFTLambdadot + 2.0_dl*eft_cache%adotoa*eft_cache%EFTLambda) )) &
+        !                           & + 1/denom * (-a*adotoa2*(adotoa2 + 3.0_dl*eft_cache%adotoa)*(3._dl*eft_cache%EFTOmegaP + 4._dl*a*eft_cache%EFTOmegaPP + a2*eft_cache%EFTOmegaPPP) &
+        !                           & - 0.5_dl * a2 * eft_cache%adotoa**4._dl * (7._dl * eft_cache%EFTOmegaPP + 6._dl*a*eft_cache%EFTOmegaPPP + a2*eft_cache%EFTOmegaPPPP) &
+        !                           & - (eft_cache%Hdot**2. + eft_cache%adotoa * eft_cache%Hdotdot)*(one_plus_omega + 3.5_dl *a*eft_cache%EFTOmegaP*1.5_dl*a2*eft_cache%EFTOmegaPP) &
+        !                           & - 0.5_dl*a*adotoa2*eft_cache%Hdot * (9._dl*eft_cache%EFTOmegaP + 13._dl*a*eft_cache%EFTOmegaPP + 3._dl * a2 * eft_cache%EFTOmegaPPP) &
+        !                           & - 0.5_dl*(eft_cache%gpresdotdotm_t + 4._dl*eft_cache%adotoa*eft_cache%gpresdotm_t + 2._dl*eft_cache%Hdot*eft_cache%gpresm_t + 4._dl * adotoa2 * eft_cache%gpresm_t) &
+        !                           & - 0.5_dl*(eft_cache%EFTLambdadotdot + 4._dl * eft_cache%adotoa*eft_cache%EFTLambdadot + 2._dl*eft_cache%Hdot*eft_cache%EFTLambda + 4._dl * adotoa2 * eft_cache%EFTLambda))
+        ! new expression (should be correct)
+        eft_cache%Hdotdotdot = (-eft_cache%EFTLambdadotdot - a*adotoa2**2*(3._dl*eft_cache%EFTOmegaP + a*(11._dl*eft_cache%EFTOmegaPP + a*(7._dl*eft_cache%EFTOmegaPPP + a*eft_cache%EFTOmegaPPPP))) - eft_cache%gpresdotdotm_t - 2._dl*eft_cache%EFTLambda*eft_cache%Hdot - 2._dl*eft_cache%gpresm_t*eft_cache%Hdot - 2._dl*eft_cache%Hdot**2 - 2._dl*eft_cache%EFTOmegaV*eft_cache%Hdot**2 - 7._dl*a*eft_cache%EFTOmegaP*eft_cache%Hdot**2 - 3._dl*a2*eft_cache%EFTOmegaPP*eft_cache%Hdot**2 - adotoa2*(4._dl*eft_cache%EFTLambda + 4._dl*eft_cache%gpresm_t + a*(18._dl*eft_cache%EFTOmegaP + 25._dl*a*eft_cache%EFTOmegaPP + 6._dl*a2*eft_cache%EFTOmegaPPP)*eft_cache%Hdot) - 2._dl*eft_cache%adotoa*(2._dl*eft_cache%EFTLambdadot + 2._dl*eft_cache%gpresdotm_t + (1._dl + eft_cache%EFTOmegaV + 5._dl*a*eft_cache%EFTOmegaP + 2._dl*a2*eft_cache%EFTOmegaPP)*eft_cache%Hdotdot))/2._dl/denom
 
     end subroutine EFTCAMBFullModelComputeHubbleDer
 
