@@ -1129,9 +1129,10 @@ contains
         eftc = eft_cache%EFTc/a**2
         dc   = eft_cache%EFTcdot/a**2
         d2c  = eft_cache%EFTcdotdot/a**2
-        cs2  = self%OL_Cs2%value(a)
-        dcs2 = self%OL_Cs2%first_derivative(a)
-        d2cs2 = self%OL_Cs2%second_derivative(a)
+        ! missed a factor of 2 in the expression, added it here
+        cs2  = 2._dl*self%OL_Cs2%value(a)
+        dcs2 = 2._dl*self%OL_Cs2%first_derivative(a)
+        d2cs2 = 2._dl*self%OL_Cs2%second_derivative(a)
 
         ! subclass: gm3 + gm4 = 0, gm6 = 0
         f1 = 2._dl*(1._dl + omg + gm3)
