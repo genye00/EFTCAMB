@@ -663,6 +663,16 @@ contains
             eft_cache%EFTGamma1P  = self%OL_Gamma1%first_derivative(a)
             eft_cache%EFTGamma1PP = self%OL_Gamma1%second_derivative(a)
         end if
+        ! compute the EFT alpha basis
+        eft_cache%Meff2     = 1._dl + eft_cache%EFTOmegaV + eft_cache%EFTGamma3V
+        eft_cache%alphaM    = a*(eft_cache%EFTOmegaP + eft_cache%EFTGamma3P)/eft_cache%Meff2
+        eft_cache%alphaMdot = eft_cache%adotoa*( eft_cache%alphaM - eft_cache%alphaM**2 + a*a*(eft_cache%EFTOmegaPP + eft_cache%EFTGamma3PP)/eft_cache%Meff2 )
+        eft_cache%alphaK    = (2._dl*eft_cache%EFTc + 4._dl*a**2*eft_par_cache%h0_Mpc**2*eft_cache%EFTGamma1V )/eft_cache%Meff2/eft_cache%adotoa**2
+        eft_cache%alphaKdot = (2._dl*eft_cache%EFTcdot + 4._dl*a**3*eft_par_cache%h0_Mpc**2*eft_cache%EFTGamma1P*eft_cache%adotoa )/eft_cache%Meff2/eft_cache%adotoa**2 + eft_cache%alphaK*eft_cache%adotoa*( 2._dl - eft_cache%alphaM - 2._dl*eft_cache%Hdot/eft_cache%adotoa**2 )
+        eft_cache%alphaB    = 0.5_dl*( a*eft_par_cache%h0_Mpc*eft_cache%EFTGamma2V + a*eft_cache%adotoa*eft_cache%EFTOmegaP )/eft_cache%adotoa/eft_cache%Meff2
+        eft_cache%alphaBdot = 0.5_dl*( a**2*eft_par_cache%h0_Mpc*eft_cache%EFTGamma2P*eft_cache%adotoa + a*eft_cache%Hdot*eft_cache%EFTOmegaP + a**2*eft_cache%adotoa**2*eft_cache%EFTOmegaPP )/eft_cache%adotoa/eft_cache%Meff2 + eft_cache%alphaB*eft_cache%adotoa*( 1._dl - eft_cache%Hdot/eft_cache%adotoa**2 - eft_cache%alphaM )
+        eft_cache%alphaT    = -eft_cache%EFTGamma3V/eft_cache%Meff2
+        eft_cache%alphaTdot = a*eft_cache%adotoa*( - eft_cache%EFTGamma3P - eft_cache%alphaT*(eft_cache%EFTOmegaP + eft_cache%EFTGamma3P) )/eft_cache%Meff2
 
 
     end subroutine EFTCAMBOLSecondOrderEFTFunctions
